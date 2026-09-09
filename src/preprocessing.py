@@ -1,21 +1,27 @@
 """
 preprocessing.py
 ----------------
-Procesamiento y preparación de los datos de Quantum ESPRESSO
-para el cálculo de la distribución de pares de Cooper.
+Procesamiento y preparación de los datos para el cálculo
+de la distribución de pares de Cooper.
 
-Material actual: Aluminio (Al)
+Convención interna:
+    - energías fonónicas: meV
+    - frecuencia fonónica auxiliar: THz
+    - energía electrónica relativa a EF: meV
+
+Principio fundamental:
+    Los datos originales contenidos en los CSV representan la
+    información física de entrada. No se generan artificialmente
+    nuevos puntos del DOS para aumentar su resolución.
+
+    Cuando una integral necesita evaluar el DOS entre dos puntos
+    tabulados, se utiliza interpolación lineal sobre los datos
+    originales.
 """
 
 from __future__ import annotations
 
 import numpy as np
-
-from .units import (
-    rydberg_to_mev,
-    cm1_to_mev,
-    energy_relative_to_fermi_mev,
-)
 
 
 # ============================================================
@@ -26,27 +32,43 @@ def remove_nan_and_inf(x, *ys):
     """
     Elimina posiciones donde x o cualquiera de los arrays y
     contengan NaN o infinito.
-
-    Returns
-    -------
-    tuple
-        (x_clean, y1_clean, y2_clean, ...)
     """
-
     x = np.asarray(x, dtype=float)
 
     mask = np.isfinite(x)
 
-    for y in ys:
-        y = np.asarray(y, dtype=float)
-        mask &= np.isfinite(y)
-
     arrays = [x]
 
     for y in ys:
-        arrays.append(np.asarray(y, dtype=float))
+        y = np.asarray(y, dtype=float)
+        mask &= np.isfinite(y)
+        arrays.append(y)
 
     return tuple(array[mask] for array in arrays)
+
+
+def _sort_and_unique(x, *ys):
+    """
+    Ordena x y elimina valores duplicados de x.
+
+    Para un valor repetido se conserva la primera aparición.
+    """
+    order = np.argsort(x)
+
+    x = x[order]
+    ys = [y[order] for y in ys]
+
+    x, unique_indices = np.unique(
+        x,
+        return_index=True,
+    )
+
+    ys = [
+        y[unique_indices]
+        for y in ys
+    ]
+
+    return (x, *ys)
 
 
 # ============================================================
@@ -54,7 +76,7 @@ def remove_nan_and_inf(x, *ys):
 # ============================================================
 
 def preprocess_eliashberg(
-    frequency_ry,
+    frequency_mev,
     a2f_total,
     add_zero=True,
     add_cutoff=True,
@@ -62,120 +84,101 @@ def preprocess_eliashberg(
     """
     Procesa la función de Eliashberg.
 
-    Pasos:
-        1. Conversión Ry -> meV.
-        2. Eliminación de valores no finitos.
-        3. Eliminación de frecuencias negativas.
-        4. Ordenamiento por frecuencia.
-        5. Eliminación de frecuencias duplicadas.
-        6. Inclusión de (0, 0).
-        7. Determinación de omega_c.
-        8. Inclusión de (omega_c, 0).
-
-    Parameters
+    Parámetros
     ----------
-    frequency_ry : array-like
-        Frecuencias en Rydberg.
+    frequency_mev : array_like
+        Frecuencia/energía fonónica en meV.
 
-    a2f_total : array-like
-        alpha^2 F total.
+    a2f_total : array_like
+        Función alpha^2 F(omega).
+
+    add_zero : bool
+        Añade (0, 0) si no está presente.
+
+    add_cutoff : bool
+        Añade (omega_c, 0) si es necesario.
 
     Returns
     -------
     dict
-        Datos procesados.
+        frequency_mev
+        a2f_total
+        omega_c_mev
     """
 
-    frequency_ry = np.asarray(frequency_ry, dtype=float)
-    a2f_total = np.asarray(a2f_total, dtype=float)
+    frequency_mev = np.asarray(
+        frequency_mev,
+        dtype=float,
+    )
 
-    # --------------------------------------------------------
-    # Eliminar NaN / inf
-    # --------------------------------------------------------
-
-    frequency_ry, a2f_total = remove_nan_and_inf(
-        frequency_ry,
-        a2f_total
+    a2f_total = np.asarray(
+        a2f_total,
+        dtype=float,
     )
 
     # --------------------------------------------------------
-    # Convertir frecuencia a meV
+    # Limpieza
     # --------------------------------------------------------
 
-    frequency_mev = rydberg_to_mev(frequency_ry)
+    frequency_mev, a2f_total = remove_nan_and_inf(
+        frequency_mev,
+        a2f_total,
+    )
 
-    # --------------------------------------------------------
-    # Eliminar frecuencias negativas
-    # --------------------------------------------------------
-
+    # Solo frecuencias físicas no negativas
     mask = frequency_mev >= 0.0
 
     frequency_mev = frequency_mev[mask]
     a2f_total = a2f_total[mask]
 
-    # --------------------------------------------------------
-    # Eliminar valores negativos de alpha^2 F
-    # --------------------------------------------------------
-
-    a2f_total = np.maximum(a2f_total, 0.0)
-
-    # --------------------------------------------------------
-    # Ordenar
-    # --------------------------------------------------------
-
-    order = np.argsort(frequency_mev)
-
-    frequency_mev = frequency_mev[order]
-    a2f_total = a2f_total[order]
-
-    # --------------------------------------------------------
-    # Eliminar frecuencias duplicadas
-    # --------------------------------------------------------
-
-    frequency_mev, unique_indices = np.unique(
-        frequency_mev,
-        return_index=True
+    # Los pequeños valores negativos se consideran
+    # artefactos numéricos.
+    a2f_total = np.maximum(
+        a2f_total,
+        0.0,
     )
 
-    a2f_total = a2f_total[unique_indices]
+    frequency_mev, a2f_total = _sort_and_unique(
+        frequency_mev,
+        a2f_total,
+    )
 
-    # --------------------------------------------------------
-    # Determinar omega_c ORIGINAL
-    #
-    # El archivo de Al tiene un último punto con:
-    #
-    # alpha^2 F = 0
-    #
-    # y ese punto corresponde al cutoff.
-    # --------------------------------------------------------
-
-    zero_indices = np.where(a2f_total == 0.0)[0]
-
-    if len(zero_indices) > 0:
-
-        # Buscamos el primer cero después de haber
-        # entrado en la región física.
-        omega_c = frequency_mev[zero_indices[0]]
-
-    else:
-
+    if len(frequency_mev) == 0:
         raise ValueError(
-            "No se encontró un punto con alpha^2F = 0. "
-            "Se necesita determinar omega_c mediante "
-            "extrapolación."
+            "No hay datos válidos de Eliashberg."
         )
 
     # --------------------------------------------------------
-    # Mantener datos hasta omega_c
+    # Determinación de omega_c
     # --------------------------------------------------------
 
+    zero_indices = np.flatnonzero(
+        a2f_total == 0.0
+    )
+
+    if len(zero_indices) == 0:
+        raise ValueError(
+            "No se encontró un punto con alpha^2F = 0. "
+            "No es posible determinar omega_c automáticamente."
+        )
+
+    omega_c = float(
+        frequency_mev[zero_indices[0]]
+    )
+
+    # Conservar la región hasta omega_c
     mask = frequency_mev <= omega_c
 
     frequency_mev = frequency_mev[mask]
     a2f_total = a2f_total[mask]
 
+    if len(frequency_mev) == 0:
+        raise ValueError(
+            "Los datos de Eliashberg quedaron vacíos."
+        )
+
     # --------------------------------------------------------
-    # Garantizar (0, 0)
+    # Condición alpha^2 F(0) = 0
     # --------------------------------------------------------
 
     if add_zero:
@@ -185,13 +188,13 @@ def preprocess_eliashberg(
             frequency_mev = np.insert(
                 frequency_mev,
                 0,
-                0.0
+                0.0,
             )
 
             a2f_total = np.insert(
                 a2f_total,
                 0,
-                0.0
+                0.0,
             )
 
         else:
@@ -200,7 +203,7 @@ def preprocess_eliashberg(
             a2f_total[0] = 0.0
 
     # --------------------------------------------------------
-    # Garantizar (omega_c, 0)
+    # Condición alpha^2 F(omega_c) = 0
     # --------------------------------------------------------
 
     if add_cutoff:
@@ -209,12 +212,12 @@ def preprocess_eliashberg(
 
             frequency_mev = np.append(
                 frequency_mev,
-                omega_c
+                omega_c,
             )
 
             a2f_total = np.append(
                 a2f_total,
-                0.0
+                0.0,
             )
 
         else:
@@ -225,7 +228,7 @@ def preprocess_eliashberg(
     return {
         "frequency_mev": frequency_mev,
         "a2f_total": a2f_total,
-        "omega_c_mev": float(omega_c),
+        "omega_c_mev": omega_c,
     }
 
 
@@ -234,7 +237,7 @@ def preprocess_eliashberg(
 # ============================================================
 
 def preprocess_phonon_dos(
-    frequency_cm1,
+    frequency_mev,
     dos,
     omega_c_mev,
     pdos=None,
@@ -242,62 +245,51 @@ def preprocess_phonon_dos(
     """
     Procesa la densidad de estados fonónica.
 
-    Pasos:
-        1. cm^-1 -> meV.
-        2. Eliminar valores no finitos.
-        3. Eliminar frecuencias negativas.
-        4. Eliminar DOS negativos.
-        5. Ordenar.
-        6. Recortar hasta omega_c.
-        7. Añadir (0,0).
-        8. Añadir (omega_c,0).
+    Los datos nuevos ya están expresados en meV.
 
-    El PDOS se conserva, pero no se utiliza como Nph principal.
+    No se fuerza artificialmente:
 
-    Returns
-    -------
-    dict
+        N_ph(omega_c) = 0
+
+    porque el archivo puede no contener exactamente un punto
+    en omega_c.
     """
 
-    frequency_cm1 = np.asarray(
-        frequency_cm1,
-        dtype=float
+    frequency_mev = np.asarray(
+        frequency_mev,
+        dtype=float,
     )
 
-    dos = np.asarray(dos, dtype=float)
-
-    if pdos is not None:
-        pdos = np.asarray(pdos, dtype=float)
+    dos = np.asarray(
+        dos,
+        dtype=float,
+    )
 
     # --------------------------------------------------------
-    # Limpiar
+    # Limpieza
     # --------------------------------------------------------
 
     if pdos is not None:
 
-        frequency_cm1, dos, pdos = remove_nan_and_inf(
-            frequency_cm1,
+        pdos = np.asarray(
+            pdos,
+            dtype=float,
+        )
+
+        frequency_mev, dos, pdos = remove_nan_and_inf(
+            frequency_mev,
             dos,
-            pdos
+            pdos,
         )
 
     else:
 
-        frequency_cm1, dos = remove_nan_and_inf(
-            frequency_cm1,
-            dos
+        frequency_mev, dos = remove_nan_and_inf(
+            frequency_mev,
+            dos,
         )
 
-    # --------------------------------------------------------
-    # Convertir a meV
-    # --------------------------------------------------------
-
-    frequency_mev = cm1_to_mev(frequency_cm1)
-
-    # --------------------------------------------------------
-    # Frecuencia >= 0
-    # --------------------------------------------------------
-
+    # Solo frecuencias no negativas
     mask = frequency_mev >= 0.0
 
     frequency_mev = frequency_mev[mask]
@@ -306,43 +298,42 @@ def preprocess_phonon_dos(
     if pdos is not None:
         pdos = pdos[mask]
 
-    # --------------------------------------------------------
-    # DOS no negativa
-    # --------------------------------------------------------
-
-    dos = np.maximum(dos, 0.0)
-
-    # --------------------------------------------------------
-    # Ordenar
-    # --------------------------------------------------------
-
-    order = np.argsort(frequency_mev)
-
-    frequency_mev = frequency_mev[order]
-    dos = dos[order]
-
-    if pdos is not None:
-        pdos = pdos[order]
-
-    # --------------------------------------------------------
-    # Eliminar duplicados
-    # --------------------------------------------------------
-
-    frequency_mev, unique_indices = np.unique(
-        frequency_mev,
-        return_index=True
+    # El DOS no puede ser negativo físicamente
+    dos = np.maximum(
+        dos,
+        0.0,
     )
 
-    dos = dos[unique_indices]
-
     if pdos is not None:
-        pdos = pdos[unique_indices]
+
+        pdos = np.maximum(
+            pdos,
+            0.0,
+        )
+
+    # Ordenar y eliminar duplicados
+    if pdos is not None:
+
+        frequency_mev, dos, pdos = _sort_and_unique(
+            frequency_mev,
+            dos,
+            pdos,
+        )
+
+    else:
+
+        frequency_mev, dos = _sort_and_unique(
+            frequency_mev,
+            dos,
+        )
 
     # --------------------------------------------------------
-    # Recortar hasta omega_c
+    # Región física
     # --------------------------------------------------------
 
-    mask = frequency_mev <= omega_c_mev
+    mask = frequency_mev <= float(
+        omega_c_mev
+    )
 
     frequency_mev = frequency_mev[mask]
     dos = dos[mask]
@@ -350,29 +341,36 @@ def preprocess_phonon_dos(
     if pdos is not None:
         pdos = pdos[mask]
 
+    if len(frequency_mev) == 0:
+        raise ValueError(
+            "El DOS fonónico no contiene datos "
+            "dentro del cutoff."
+        )
+
     # --------------------------------------------------------
-    # Añadir (0,0)
+    # Condición N_ph(0) = 0
     # --------------------------------------------------------
 
-    if len(frequency_mev) == 0 or frequency_mev[0] > 0.0:
+    if frequency_mev[0] > 0.0:
 
         frequency_mev = np.insert(
             frequency_mev,
             0,
-            0.0
+            0.0,
         )
 
         dos = np.insert(
             dos,
             0,
-            0.0
+            0.0,
         )
 
         if pdos is not None:
+
             pdos = np.insert(
                 pdos,
                 0,
-                0.0
+                0.0,
             )
 
     else:
@@ -383,39 +381,10 @@ def preprocess_phonon_dos(
         if pdos is not None:
             pdos[0] = 0.0
 
-    # --------------------------------------------------------
-    # Añadir (omega_c, 0)
-    # --------------------------------------------------------
-
-    if frequency_mev[-1] < omega_c_mev:
-
-        frequency_mev = np.append(
-            frequency_mev,
-            omega_c_mev
-        )
-
-        dos = np.append(
-            dos,
-            0.0
-        )
-
-        if pdos is not None:
-            pdos = np.append(
-                pdos,
-                0.0
-            )
-
-    else:
-
-        frequency_mev[-1] = omega_c_mev
-        dos[-1] = 0.0
-
-        if pdos is not None:
-            pdos[-1] = 0.0
-
     result = {
         "frequency_mev": frequency_mev,
         "dos": dos,
+        "omega_c_mev": float(omega_c_mev),
     }
 
     if pdos is not None:
@@ -429,125 +398,261 @@ def preprocess_phonon_dos(
 # ============================================================
 
 def preprocess_electronic_dos(
-    energy_ev,
+    epsilon_mev,
     dos,
-    fermi_energy_ev,
     omega_c_mev,
 ):
     """
-    Procesa el DOS electrónico.
+    Procesa la densidad de estados electrónica.
 
-    Se transforma:
+    Se utiliza:
 
-        epsilon = E - EF
+        epsilon = E - E_F
 
-    y posteriormente se convierte a meV.
+    y epsilon está expresado en meV.
 
-    Finalmente se conserva únicamente:
-
-        -omega_c <= epsilon <= omega_c
-
-    Parameters
+    IMPORTANTE
     ----------
-    energy_ev : array-like
-        Energía absoluta E [eV].
+    NO se recortan los datos originales al intervalo
+    [-omega_c, omega_c].
 
-    dos : array-like
-        DOS electrónico.
+    Esto es necesario cuando la resolución del DOS electrónico
+    es mayor que la ventana energética de interés.
 
-    fermi_energy_ev : float
-        Energía de Fermi [eV].
+    Por ejemplo, para Pb puede ocurrir:
 
-    omega_c_mev : float
-        Cutoff fonónico [meV].
+        omega_c ~ 9.87 meV
 
-    Returns
-    -------
-    dict
+    mientras que los datos originales contienen:
+
+        -37 meV
+        +13 meV
+
+    Aunque ninguno de estos puntos está dentro de la ventana,
+    ambos son necesarios para interpolar N_e(epsilon) dentro
+    de dicha ventana.
+
+    No se generan nuevos datos físicos. La interpolación se
+    realiza exclusivamente entre puntos originalmente tabulados.
     """
 
-    energy_ev = np.asarray(
-        energy_ev,
-        dtype=float
+    epsilon_mev = np.asarray(
+        epsilon_mev,
+        dtype=float,
     )
 
     dos = np.asarray(
         dos,
-        dtype=float
+        dtype=float,
     )
 
     # --------------------------------------------------------
-    # Limpiar
+    # Limpieza
     # --------------------------------------------------------
 
-    energy_ev, dos = remove_nan_and_inf(
-        energy_ev,
-        dos
+    epsilon_mev, dos = remove_nan_and_inf(
+        epsilon_mev,
+        dos,
+    )
+
+    # El DOS no puede ser negativo físicamente.
+    # Los valores negativos se interpretan como artefactos
+    # numéricos del archivo.
+    dos = np.maximum(
+        dos,
+        0.0,
+    )
+
+    # Ordenar y eliminar duplicados
+    epsilon_mev, dos = _sort_and_unique(
+        epsilon_mev,
+        dos,
+    )
+
+    if len(epsilon_mev) == 0:
+        raise ValueError(
+            "No hay datos válidos de DOS electrónico."
+        )
+
+    omega_c_mev = float(
+        omega_c_mev
     )
 
     # --------------------------------------------------------
-    # Epsilon = E - EF
+    # Verificación de cobertura alrededor de EF
     # --------------------------------------------------------
 
-    epsilon_mev = energy_relative_to_fermi_mev(
-        energy_ev,
-        fermi_energy_ev
+    if epsilon_mev[0] > 0.0:
+
+        raise ValueError(
+            "El DOS electrónico no contiene datos por debajo "
+            "de E_F. No es posible cubrir el intervalo físico."
+        )
+
+    if epsilon_mev[-1] < 0.0:
+
+        raise ValueError(
+            "El DOS electrónico no contiene datos por encima "
+            "de E_F. No es posible cubrir el intervalo físico."
+        )
+
+    # --------------------------------------------------------
+    # Interpolador
+    # --------------------------------------------------------
+
+    def dos_interpolator(epsilon):
+
+        epsilon = np.asarray(
+            epsilon,
+            dtype=float,
+        )
+
+        return np.interp(
+            epsilon,
+            epsilon_mev,
+            dos,
+            left=0.0,
+            right=0.0,
+        )
+
+    # --------------------------------------------------------
+    # DOS en el nivel de Fermi
+    # --------------------------------------------------------
+
+    dos_at_fermi = float(
+        dos_interpolator(0.0)
     )
 
     # --------------------------------------------------------
-    # El DOS no debería ser negativo.
-    #
-    # El archivo puede contener pequeños valores negativos
-    # numéricos. Los convertimos a cero.
+    # Resolución original del DOS
     # --------------------------------------------------------
 
-    dos = np.maximum(dos, 0.0)
+    if len(epsilon_mev) > 1:
+
+        delta_e_mev = np.diff(
+            epsilon_mev
+        )
+
+        resolution_min_mev = float(
+            np.min(delta_e_mev)
+        )
+
+        resolution_max_mev = float(
+            np.max(delta_e_mev)
+        )
+
+    else:
+
+        resolution_min_mev = np.nan
+        resolution_max_mev = np.nan
 
     # --------------------------------------------------------
-    # Recortar al intervalo:
-    #
-    # -omega_c <= epsilon <= omega_c
+    # Puntos originales dentro de la ventana física
     # --------------------------------------------------------
 
-    mask = (
+    inside_window = (
         (epsilon_mev >= -omega_c_mev)
         &
         (epsilon_mev <= omega_c_mev)
     )
 
-    epsilon_mev = epsilon_mev[mask]
-    dos = dos[mask]
-
-    # --------------------------------------------------------
-    # Ordenar
-    # --------------------------------------------------------
-
-    order = np.argsort(epsilon_mev)
-
-    epsilon_mev = epsilon_mev[order]
-    dos = dos[order]
-
-    # --------------------------------------------------------
-    # Eliminar duplicados
-    # --------------------------------------------------------
-
-    epsilon_mev, unique_indices = np.unique(
-        epsilon_mev,
-        return_index=True
+    n_points_inside = int(
+        np.count_nonzero(
+            inside_window
+        )
     )
 
-    dos = dos[unique_indices]
+    # --------------------------------------------------------
+    # Distancia a los puntos originales más cercanos
+    # --------------------------------------------------------
+
+    below = epsilon_mev[
+        epsilon_mev <= 0.0
+    ]
+
+    above = epsilon_mev[
+        epsilon_mev >= 0.0
+    ]
+
+    if len(below) > 0:
+        epsilon_below_fermi = float(
+            below[-1]
+        )
+    else:
+        epsilon_below_fermi = np.nan
+
+    if len(above) > 0:
+        epsilon_above_fermi = float(
+            above[0]
+        )
+    else:
+        epsilon_above_fermi = np.nan
+
+    # --------------------------------------------------------
+    # Resultado
+    # --------------------------------------------------------
 
     return {
+        # ----------------------------------------------------
+        # Datos originales
+        # ----------------------------------------------------
+
         "epsilon_mev": epsilon_mev,
         "dos": dos,
-        "fermi_energy_ev": float(fermi_energy_ev),
-        "omega_c_mev": float(omega_c_mev),
+
+        # ----------------------------------------------------
+        # Parámetros físicos
+        # ----------------------------------------------------
+
+        "fermi_energy_ev": 0.0,
+
+        "omega_c_mev": omega_c_mev,
+
+        "epsilon_window_mev": (
+            -omega_c_mev,
+            omega_c_mev,
+        ),
+
+        # ----------------------------------------------------
+        # Interpolación
+        # ----------------------------------------------------
+
+        "dos_interpolator": dos_interpolator,
+
+        "dos_at_fermi": dos_at_fermi,
+
+        # ----------------------------------------------------
+        # Diagnóstico de resolución
+        # ----------------------------------------------------
+
+        "resolution_min_mev": (
+            resolution_min_mev
+        ),
+
+        "resolution_max_mev": (
+            resolution_max_mev
+        ),
+
+        "n_points_inside_window": (
+            n_points_inside
+        ),
+
+        "has_direct_points_inside_window": (
+            n_points_inside > 0
+        ),
+
+        "epsilon_below_fermi_mev": (
+            epsilon_below_fermi
+        ),
+
+        "epsilon_above_fermi_mev": (
+            epsilon_above_fermi
+        ),
     }
 
 
 # ============================================================
-# PROCESAMIENTO COMPLETO DE AL
+# PROCESAMIENTO COMPLETO
 # ============================================================
 
 def preprocess_aluminum(
@@ -556,68 +661,139 @@ def preprocess_aluminum(
     electronic_data,
 ):
     """
-    Procesa simultáneamente los tres conjuntos de datos
-    correspondientes al aluminio.
+    Procesa los tres conjuntos de datos.
 
-    Parameters
-    ----------
-    eliashberg_data : dict
-        Salida de read_eliashberg().
-
-    phonon_data : dict
-        Salida de read_phonon_dos().
-
-    electronic_data : dict
-        Salida de read_electronic_dos().
-
-    Returns
-    -------
-    dict
-        Diccionario con todos los datos procesados.
+    El nombre de la función se conserva por compatibilidad
+    con la estructura original del proyecto.
     """
 
-    # --------------------------------------------------------
-    # 1. Eliashberg
-    # --------------------------------------------------------
+    # ========================================================
+    # ELIASHBERG
+    # ========================================================
+
+    eliashberg_frequency = eliashberg_data.get(
+        "frequency_mev",
+        eliashberg_data.get("frequency_ry"),
+    )
+
+    if eliashberg_frequency is None:
+
+        raise KeyError(
+            "Los datos de Eliashberg no contienen "
+            "frequency_mev."
+        )
+
+    # Compatibilidad con datos antiguos
+    if "frequency_mev" not in eliashberg_data:
+
+        from .units import rydberg_to_mev
+
+        eliashberg_frequency = rydberg_to_mev(
+            eliashberg_frequency
+        )
 
     eliashberg = preprocess_eliashberg(
-        eliashberg_data["frequency_ry"],
+        eliashberg_frequency,
         eliashberg_data["a2f_total"],
     )
 
-    omega_c_mev = eliashberg["omega_c_mev"]
+    omega_c_mev = eliashberg[
+        "omega_c_mev"
+    ]
 
-    # --------------------------------------------------------
-    # 2. Phonon DOS
-    # --------------------------------------------------------
+    # ========================================================
+    # PHONON DOS
+    # ========================================================
+
+    phonon_frequency = phonon_data.get(
+        "frequency_mev",
+        phonon_data.get("frequency_cm1"),
+    )
+
+    if phonon_frequency is None:
+
+        raise KeyError(
+            "Los datos fonónicos no contienen "
+            "frequency_mev."
+        )
+
+    # Compatibilidad con datos antiguos
+    if "frequency_mev" not in phonon_data:
+
+        from .units import cm1_to_mev
+
+        phonon_frequency = cm1_to_mev(
+            phonon_frequency
+        )
 
     phonon = preprocess_phonon_dos(
-        phonon_data["frequency_cm1"],
+        phonon_frequency,
         phonon_data["dos"],
         omega_c_mev,
         pdos=phonon_data.get("pdos"),
     )
 
-    # --------------------------------------------------------
-    # 3. Electronic DOS
-    # --------------------------------------------------------
+    # ========================================================
+    # ELECTRONIC DOS
+    # ========================================================
+
+    if "epsilon_mev" in electronic_data:
+
+        epsilon_mev = electronic_data[
+            "epsilon_mev"
+        ]
+
+    elif "energy_ev" in electronic_data:
+
+        from .units import (
+            energy_relative_to_fermi_mev
+        )
+
+        epsilon_mev = (
+            energy_relative_to_fermi_mev(
+                electronic_data["energy_ev"],
+                electronic_data["fermi_energy_ev"],
+            )
+        )
+
+    else:
+
+        raise KeyError(
+            "Los datos electrónicos no contienen "
+            "epsilon_mev."
+        )
 
     electronic = preprocess_electronic_dos(
-        electronic_data["energy_ev"],
+        epsilon_mev,
         electronic_data["dos"],
-        electronic_data["fermi_energy_ev"],
         omega_c_mev,
     )
 
+    # ========================================================
+    # RESULTADO FINAL
+    # ========================================================
+
     return {
         "eliashberg": eliashberg,
+
         "phonon": phonon,
+
         "electronic": electronic,
 
         "superconducting_parameters": {
             "omega_c_mev": omega_c_mev,
-            "fermi_energy_ev": electronic_data["fermi_energy_ev"],
-            "lambda": eliashberg_data.get("lambda"),
-            "Delta": eliashberg_data.get("Delta"),
+
+            "fermi_energy_ev": electronic_data.get(
+                "fermi_energy_ev",
+                0.0,
+            ),
+
+            "lambda": eliashberg_data.get(
+                "lambda"
+            ),
+
+            "Delta": eliashberg_data.get(
+                "Delta"
+            ),
         },
     }

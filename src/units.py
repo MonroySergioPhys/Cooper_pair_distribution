@@ -3,6 +3,11 @@ units.py
 --------
 Conversiones de unidades utilizadas en el proyecto
 de distribución de pares de Cooper.
+
+Convención interna para los nuevos CSV:
+    energía/frecuencia fonónica -> meV
+    frecuencia auxiliar          -> THz
+    energía electrónica relativa -> meV
 """
 
 from __future__ import annotations
@@ -14,23 +19,23 @@ import numpy as np
 # CONSTANTES
 # ============================================================
 
-# 1 Rydberg en eV
+# Rydberg
 RY_TO_EV = 13.605693009
-
-# 1 Rydberg en meV
 RY_TO_MEV = RY_TO_EV * 1000.0
 
-# 1 cm^-1 en eV
+# cm^-1
 CM1_TO_EV = 1.0 / 8065.544005
-
-# 1 cm^-1 en meV
 CM1_TO_MEV = CM1_TO_EV * 1000.0
 
-# 1 eV en meV
+# eV <-> meV
 EV_TO_MEV = 1000.0
+MEV_TO_EV = 1.0 / EV_TO_MEV
 
-# 1 meV en eV
-MEV_TO_EV = 1.0 / 1000.0
+# THz <-> meV
+# E = h f
+# h = 4.135667696 meV THz^-1
+THZ_TO_MEV = 4.135667696
+MEV_TO_THZ = 1.0 / THZ_TO_MEV
 
 
 # ============================================================
@@ -38,17 +43,13 @@ MEV_TO_EV = 1.0 / 1000.0
 # ============================================================
 
 def rydberg_to_ev(value):
-    """
-    Convierte Rydberg a eV.
-    """
-    return np.asarray(value) * RY_TO_EV
+    """Convierte Rydberg a eV."""
+    return np.asarray(value, dtype=float) * RY_TO_EV
 
 
 def rydberg_to_mev(value):
-    """
-    Convierte Rydberg a meV.
-    """
-    return np.asarray(value) * RY_TO_MEV
+    """Convierte Rydberg a meV."""
+    return np.asarray(value, dtype=float) * RY_TO_MEV
 
 
 # ============================================================
@@ -56,17 +57,13 @@ def rydberg_to_mev(value):
 # ============================================================
 
 def cm1_to_ev(value):
-    """
-    Convierte cm^-1 a eV.
-    """
-    return np.asarray(value) * CM1_TO_EV
+    """Convierte cm^-1 a eV."""
+    return np.asarray(value, dtype=float) * CM1_TO_EV
 
 
 def cm1_to_mev(value):
-    """
-    Convierte cm^-1 a meV.
-    """
-    return np.asarray(value) * CM1_TO_MEV
+    """Convierte cm^-1 a meV."""
+    return np.asarray(value, dtype=float) * CM1_TO_MEV
 
 
 # ============================================================
@@ -74,56 +71,51 @@ def cm1_to_mev(value):
 # ============================================================
 
 def ev_to_mev(value):
-    """
-    Convierte eV a meV.
-    """
-    return np.asarray(value) * EV_TO_MEV
+    """Convierte eV a meV."""
+    return np.asarray(value, dtype=float) * EV_TO_MEV
 
 
 def mev_to_ev(value):
-    """
-    Convierte meV a eV.
-    """
-    return np.asarray(value) * MEV_TO_EV
+    """Convierte meV a eV."""
+    return np.asarray(value, dtype=float) * MEV_TO_EV
+
+
+# ============================================================
+# THz
+# ============================================================
+
+def thz_to_mev(value):
+    """Convierte THz a meV mediante E = h f."""
+    return np.asarray(value, dtype=float) * THZ_TO_MEV
+
+
+def mev_to_thz(value):
+    """Convierte meV a THz."""
+    return np.asarray(value, dtype=float) * MEV_TO_THZ
 
 
 # ============================================================
 # ENERGÍA RELATIVA AL NIVEL DE FERMI
 # ============================================================
 
-def energy_relative_to_fermi(
-    energy_ev,
-    fermi_energy_ev
-):
+def energy_relative_to_fermi(energy_ev, fermi_energy_ev):
     """
     Calcula epsilon = E - EF.
 
-    Parameters
+    Parámetros
     ----------
     energy_ev : array-like
         Energía absoluta en eV.
-
     fermi_energy_ev : float
         Energía de Fermi en eV.
-
-    Returns
-    -------
-    np.ndarray
-        Energía relativa al nivel de Fermi en eV.
     """
+    return np.asarray(energy_ev, dtype=float) - float(fermi_energy_ev)
 
-    return np.asarray(energy_ev) - fermi_energy_ev
 
-
-def energy_relative_to_fermi_mev(
-    energy_ev,
-    fermi_energy_ev
-):
+def energy_relative_to_fermi_mev(energy_ev, fermi_energy_ev):
     """
-    Calcula epsilon = E - EF directamente en meV.
+    Calcula epsilon = E - EF y devuelve el resultado en meV.
     """
-
-    return energy_relative_to_fermi(
-        energy_ev,
-        fermi_energy_ev
-    ) * EV_TO_MEV
+    return ev_to_mev(
+        energy_relative_to_fermi(energy_ev, fermi_energy_ev)
+    )
