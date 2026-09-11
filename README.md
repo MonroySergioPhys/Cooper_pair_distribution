@@ -49,12 +49,10 @@ Implementar computacionalmente la función de distribución de pares de Cooper u
 * Calcular
 
 $$
-\Delta_{Dcp}
-=
-\omega_\epsilon-\omega_{\epsilon'}.
+\Delta_{Dcp}=\omega_\epsilon-\omega_{\epsilon'}.
 $$
 
-* Comparar \(\frac{1}{2}\Delta_{Dcp}\) con la brecha superconductora \(\Delta(0)\).
+* Comparar $\frac{1}{2}\Delta_{Dcp}$ con la brecha superconductora $\Delta(0)$.
 
 ---
 
@@ -71,10 +69,7 @@ $$
 A partir de ella se obtiene el acoplamiento electrón-fonón mediante
 
 $$
-\alpha^2(\omega)
-=
-\frac{\alpha^2F(\omega)}
-{N_{ph}(\omega)}.
+\alpha^2(\omega)=\frac{\alpha^2F(\omega)}{N_{ph}(\omega)}.
 $$
 
 ---
@@ -84,24 +79,13 @@ $$
 Para los electrones ocupados se utiliza
 
 $$
-g_e^o(\epsilon,T)
-=
-N_e(\epsilon)
-\frac{1}
-{e^{\beta(\epsilon-E_F)}+1},
+g_e^o(\epsilon,T)=N_e(\epsilon)\frac{1}{e^{\beta(\epsilon-E_F)}+1},
 $$
 
 mientras que para los estados vacantes:
 
 $$
-g_e^v(\epsilon,T)
-=
-N_e(\epsilon)
-\left(
-1-
-\frac{1}
-{e^{\beta(\epsilon-E_F)}+1}
-\right).
+g_e^v(\epsilon,T)=N_e(\epsilon)\left(1-\frac{1}{e^{\beta(\epsilon-E_F)}+1}\right).
 $$
 
 ---
@@ -111,8 +95,7 @@ $$
 Para los fonones:
 
 $$
-g_p^n(\omega,T)
-=
+g_p^n(\omega,T)=
 N_{ph}(\omega)
 \frac{1}
 {e^{\beta\omega}-1},
@@ -121,8 +104,7 @@ $$
 y
 
 $$
-g_p^{n+1}(\omega,T)
-=
+g_p^{n+1}(\omega,T)=
 N_{ph}(\omega)
 \left(
 1+
@@ -160,8 +142,7 @@ $$
 La cantidad integrada sobre las frecuencias fonónicas es
 
 $$
-N_{cp}
-=
+N_{cp}=
 \int_0^{\omega_c}
 D_{cp}(\omega,T_c)\,d\omega.
 $$
@@ -194,8 +175,7 @@ A partir de estas energías se define
 
 $$
 \boxed{
-\Delta_{Dcp}
-=
+\Delta_{Dcp}=
 \omega_\epsilon-\omega_{\epsilon'}
 }
 $$
@@ -395,7 +375,7 @@ Antes del cálculo se realizan diferentes operaciones:
 * eliminación de puntos duplicados;
 * tratamiento de valores negativos espurios en las DOS;
 * incorporación del origen cuando es necesario;
-* determinación de \(\omega_c\);
+* determinación de $\omega_c$;
 * interpolación de la densidad de estados electrónica.
 
 Un punto importante del procesamiento es que **no se generan datos físicos artificiales para aumentar la resolución de las DOS**.
@@ -476,8 +456,8 @@ para cada material.
 
 También obtiene:
 
-* \(\omega_{cp}\);
-* \(N_{cp}\);
+* $\omega_{cp}$;
+* $N_{cp}$;
 * archivos CSV con los resultados;
 * gráficas de la distribución.
 
@@ -529,12 +509,12 @@ $$
 
 El proyecto genera diferentes tipos de gráficas para cada material:
 
-1. Función de Eliashberg \(\alpha^2F(\omega)\).
+1. Función de Eliashberg $\alpha^2F(\omega)$.
 2. Densidad de estados fonónica.
 3. Densidad de estados electrónica.
-4. Distribución de pares de Cooper \(D_{cp}(\omega)\).
-5. Distribución \(eD_{cp}(\epsilon)\).
-6. Distribución \(eD_{cp}(\epsilon')\).
+4. Distribución de pares de Cooper $D_{cp}(\omega)$.
+5. Distribución $eD_{cp}(\epsilon)$.
+6. Distribución $eD_{cp}(\epsilon')$.
 
 Las figuras se almacenan en:
 
@@ -554,7 +534,7 @@ results/tables/
 
 Actualmente se consideran cinco materiales superconductores:
 
-| Material | Símbolo | \(T_c\) aproximada |
+| Material | Símbolo | $T_c$ aproximada |
 | -------- | ------: | -----------------: |
 | Aluminio |      Al |             1.18 K |
 | Mercurio |      Hg |             4.15 K |
@@ -562,7 +542,7 @@ Actualmente se consideran cinco materiales superconductores:
 | Tantalio |      Ta |        4.47–4.48 K |
 | Plomo    |      Pb |             7.19 K |
 
-Los valores de \(T_c\) utilizados en los cálculos deben mantenerse consistentes con los valores definidos en los notebooks.
+Los valores de $T_c$ utilizados en los cálculos deben mantenerse consistentes con los valores definidos en los notebooks.
 
 ---
 
@@ -602,7 +582,7 @@ En consecuencia, los resultados asociados a Pb deben interpretarse con precauci�
 
 Los cálculos permiten obtener las siguientes magnitudes:
 
-| Material | \(\omega_\epsilon\) (meV) | \(\omega_{\epsilon'}\) (meV) | \(\Delta_{Dcp}\) (meV) | \(\frac12\Delta_{Dcp}\) (meV) |
+| Material | $\omega_\epsilon$ (meV) | $\omega_{\epsilon'}$ (meV) | $\Delta_{Dcp}$ (meV) | $\frac12\Delta_{Dcp}$ (meV) |
 | -------- | ------------------------: | ---------------------------: | ---------------------: | ----------------------------: |
 | Al       |                    0.1655 |                      -0.1655 |                 0.3309 |                        0.1655 |
 | Hg       |                    0.4257 |                      -0.4257 |                 0.8514 |                        0.4257 |
@@ -610,7 +590,7 @@ Los cálculos permiten obtener las siguientes magnitudes:
 | Ta       |                    0.5336 |                      -0.5336 |                 1.0673 |                        0.5336 |
 | Pb       |                    1.0455 |                      -1.0620 |                 2.1075 |                        1.0537 |
 
-Estos valores se utilizan posteriormente para comparar la escala energética obtenida mediante la distribución de pares de Cooper con la brecha superconductora \(\Delta(0)\).
+Estos valores se utilizan posteriormente para comparar la escala energética obtenida mediante la distribución de pares de Cooper con la brecha superconductora $\Delta(0)$.
 
 > **Nota:** los valores numéricos dependen de los datos de entrada, el preprocesamiento y la resolución de las DOS. En particular, el resultado de Pb presenta una limitación de resolución que debe considerarse en la interpretación.
 
@@ -703,9 +683,9 @@ Contiene las funciones relacionadas directamente con el cálculo numérico de la
 
 El desarrollo teórico y computacional del proyecto se basa principalmente en la guía de trabajo:
 
-> G. I. González-Pedreros, *Cooper pair distribution function*, guía de trabajo, 4 de septiembre de 2026.
+> Gonz{\'a}lez-Pedreros, G. I., Camargo-Mart{\'\i}nez, J. A., \& Mesa, F. Cooper-pair distribution function $D_{cp}(\omega, T_c)$ for superconducting $\mathrm{D_3S}$ and $\mathrm{H_3S}$. \textit{Sci Rep} \textbf{11}, 22618 (2021). https://doi.org/10.1038/s41598-021-02081-w.
 
-Las referencias adicionales utilizadas para \(T_c\), \(\Delta(0)\), datos de Eliashberg y propiedades de los materiales deben registrarse en el informe final del proyecto.
+Las referencias adicionales utilizadas para $T_c$, $\Delta(0)$, datos de Eliashberg y propiedades de los materiales deben registrarse en el informe final del proyecto.
 
 ---
 
