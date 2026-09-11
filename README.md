@@ -16,9 +16,9 @@
 
 Este proyecto implementa un procedimiento computacional para estudiar la **distribución de pares de Cooper** en materiales superconductores a partir de información electrónica y fonónica.
 
-El cálculo se basa en la función de distribución de pares de Cooper \(D_{cp}(\omega,T_c)\) y en sus distribuciones energéticas asociadas \(eD_{cp}(\epsilon)\) y \(eD_{cp}(\epsilon')\).
+El cálculo se basa en la función de distribución de pares de Cooper $D_{cp}(\omega,T_c)$ y en sus distribuciones energéticas asociadas $eD_{cp}(\epsilon)$ y $eD_{cp}(\epsilon')$.
 
-El objetivo principal es analizar cómo las propiedades electrónicas y fonónicas de un material se relacionan con la formación de pares de Cooper y, particularmente, estudiar la relación entre la separación energética obtenida a partir de la distribución calculada y la brecha superconductora experimental \(\Delta(0)\).
+El objetivo principal es analizar cómo las propiedades electrónicas y fonónicas de un material se relacionan con la formación de pares de Cooper y, particularmente, estudiar la relación entre la separación energética obtenida a partir de la distribución calculada y la brecha superconductora experimental $\Delta(0)$.
 
 Los materiales considerados actualmente son:
 
@@ -39,13 +39,13 @@ Implementar computacionalmente la función de distribución de pares de Cooper u
 ### Objetivos específicos
 
 * Procesar y homogenizar los datos de entrada.
-* Determinar numéricamente la frecuencia de corte \(\omega_c\).
-* Incorporar la función de Eliashberg \(\alpha^2F(\omega)\).
-* Procesar la densidad de estados fonónica \(N_{ph}(\omega)\).
-* Procesar la densidad de estados electrónica \(N_e(\epsilon)\).
-* Calcular la distribución de pares de Cooper \(D_{cp}(\omega,T_c)\).
-* Calcular \(eD_{cp}(\epsilon)\) y \(eD_{cp}(\epsilon')\).
-* Determinar las energías características \(\omega_\epsilon\) y \(\omega_{\epsilon'}\).
+* Determinar numéricamente la frecuencia de corte $\omega_c$.
+* Incorporar la función de Eliashberg $\alpha^2F(\omega)$.
+* Procesar la densidad de estados fonónica $N_{ph}(\omega)$.
+* Procesar la densidad de estados electrónica $N_e(\epsilon)$.
+* Calcular la distribución de pares de Cooper $D_{cp}(\omega,T_c)$.
+* Calcular $eD_{cp}(\epsilon)$ y $eD_{cp}(\epsilon')$.
+* Determinar las energías características $\omega_\epsilon$ y $\omega_{\epsilon'}$.
 * Calcular
 
 $$
